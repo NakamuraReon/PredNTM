@@ -1,4 +1,3 @@
-# package
 import numpy as np
 import torch
 from torch import nn
@@ -68,6 +67,3 @@ class NTM(nn.Module):
             
             fw.write('{}\n'.format(' '.join(topic_words)))
         fw.close()
-
-
-
