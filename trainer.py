@@ -13,6 +13,7 @@ from torch.utils.tensorboard import SummaryWriter
 # sklearn
 from sklearn.utils import shuffle
 import ntm
+import pred
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
@@ -22,6 +23,10 @@ def loss_function(recon_x, x, mu, logvar):
     BCE = F.binary_cross_entropy(recon_x, x, size_average=False)
     KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
     return BCE + KLD
+
+def pred_loss_function(pred_sita, sita):
+    MSE = nn.MSELoss(pred_sita, sita)
+    return MSE
 
 # なぜL1正則化が使われているのか
 # https://pytorch.org/docs/stable/generated/torch.nn.L1Loss.html
@@ -143,9 +148,9 @@ def compute_z(model, dataloader):
             data_bow_norm = F.normalize(data_bow)
             z, _, _, _, _ = model(data_bow_norm)
             computed_z = torch.cat((computed_z, z), 0)
-    print("computed_z: {}".format(computed_z))
-    print("computed_zsize: {}".format(len(computed_z)))
-    print("z: {}".format(len(z[0])))
+    # print("computed_z: {}".format(computed_z))
+    # print("computed_zsize: {}".format(len(computed_z)))
+    # print("z: {}".format(len(z[0])))
     return computed_z
 
 
