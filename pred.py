@@ -11,7 +11,7 @@ class My_rnn_net(nn.Module):
 
         self.input_size = input_size #入力データ(x)
         self.hidden_dim = hidden_dim #隠れ層データ(hidden)
-        self.n_layers = n_layers #RNNを「上方向に」何層重ねるか？の設定 ※横方向ではない
+        # self.n_layers = n_layers #RNNを「上方向に」何層重ねるか？の設定 ※横方向ではない
         self.rnn = nn.RNN(input_size, hidden_dim)
         self.fc = nn.Linear(hidden_dim, output_size) #全結合層でhiddenからの出力を1個にする
 
