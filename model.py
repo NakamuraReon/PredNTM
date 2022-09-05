@@ -3,11 +3,9 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 
-
-# cited : https://github.com/yuewang-cuhk/TAKG/blob/master/pykp/model.py
-class NTM(nn.Module):
+class Model(nn.Module):
     def __init__(self, input_dim, hidden_dim, topic_num, device, l1_strength=0.001):
-        super(NTM, self).__init__()
+        super(Model, self).__init__()
         self.input_dim = input_dim
         self.topic_num = topic_num
         self.fc11 = nn.Linear(self.input_dim, hidden_dim)
@@ -22,13 +20,11 @@ class NTM(nn.Module):
         self.fcd1 = nn.Linear(topic_num, self.input_dim)
         self.sita = None
         self.cat_z = torch.tensor([])
-        self.y_rnn = None
+        self.sita_hat = None
         self.l1_strength = torch.FloatTensor([l1_strength]).to(device)
-        # self.rnn = nn.RNN(topic_num, hidden_dim, 1, batch_first=True)
-        self.rnn = nn.Linear(topic_num, topic_num)
-        # self.rnn_fc = nn.Linear(hidden_dim, topic_num) #全結合層でhiddenからの出力を1個にする
-
-
+        self.fcp1 = nn.Linear(topic_num, topic_num)
+        self.fcp2 = nn.Linear(topic_num, topic_num)
+    
     def encode(self, x):
         e1 = F.relu(self.fc11(x))
         e1 = F.relu(self.fc12(e1))
@@ -55,35 +51,29 @@ class NTM(nn.Module):
         d1 = F.softmax(self.fcd1(z), dim=1)
         return d1
 
-    def forward(self, x, batch_idx, dataloader, period):
+    def forward(self, x, batch_idx, last_batch_idx):
         mu, logvar = self.encode(x.view(-1, self.input_dim))
         z = self.reparameterize(mu, logvar)
-        g = self.generate(z)
-        
+        g = self.generate(z)  
         if batch_idx == 0:
-            # self.cat_z = torch.tensor([])
             self.cat_z = z
-            print("{}-{}".format(period, batch_idx))
-        elif batch_idx == 2:
+            # print("{}-{}".format(period, batch_idx))
+        elif batch_idx == last_batch_idx:
             self.cat_z = torch.cat((self.cat_z, z), 0)
-            self.cat_z = sum(self.cat_z)
-            self.sita = torch.softmax(self.cat_z, dim=0)
+            sum_z = sum(self.cat_z)
+            self.sita = torch.softmax(sum_z, dim=0)
             self.sita = torch.reshape(self.sita, (1, 15))
-            self.y_rnn = self.rnn(self.sita)
-            # self.y_rnn = self.rnn_fc(self.y_rnn)
-            print("{}-{}-elif".format(period, batch_idx))
+            self.sita_hat = self.fcp1(self.sita)
+            # print("{}-{}-elif".format(period, batch_idx))
         else:
             self.cat_z = torch.cat((self.cat_z, z), 0)
-            # self.cat_z = self.cat_z +  z
-            print("{}-{}-else".format(period, batch_idx))
-        return z, g, self.decode(g), mu, logvar, self.sita, self.y_rnn
+            # print("{}-{}-else".format(period, batch_idx))
+        return z, g, self.decode(g), mu, logvar, self.sita, self.sita_hat
 
     def print_topic_words(self, vocab_dic, fn, n_top_words=10):
         beta_exp = self.fcd1.weight.data.cpu().numpy().T
-        
         print("Writing to %s" % fn)
         fw = open(fn, 'w')
-        
         for k, beta_k in enumerate(beta_exp):
             topic_words = [vocab_dic[w_id] for w_id in np.argsort(beta_k)[:-n_top_words - 1:-1]]
             
