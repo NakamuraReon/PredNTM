@@ -20,7 +20,8 @@ def ntm_loss_function(recon_x, x, mu, logvar):
 
 
 def pred_loss_function(sita, sita_hat):
-    MSE = nn.MSELoss(sita, sita_hat)
+    mse = nn.MSELoss()
+    MSE = mse(sita, sita_hat)
     return MSE
 
 
@@ -49,13 +50,17 @@ def compute_loss(model, dataloader, optimizer, epoch, last_batch_idx, sita_hat, 
         # z, g, recon_batch, mu, logvar, y_rnn = model(data_bow_norm)
         z, g, recon_batch, mu, logvar, sita, next_sita_hat = model(data_bow_norm, batch_idx, last_batch_idx)
         # z, g, recon_batch, mu, logvar = model(data_bow_norm, batch_idx, dataloader, period)
-        print("sita:{}".format(sita))
-        print("sita_hat:{}".format(next_sita_hat))
+        # print("sita:{}".format(sita))
+        # print("sita_hat:{}".format(next_sita_hat))
         # print("sita_hat:{}".format(sita_hat/sum(sita_hat)))
         if sita_hat == None:
+            print(batch_idx)
             loss = ntm_loss_function(recon_batch, data_bow, mu, logvar)
+        elif batch_idx == last_batch_idx:
+            # loss = ntm_loss_function(recon_batch, data_bow, mu, logvar) + pred_loss_function(sita, sita_hat)
+            loss = pred_loss_function(sita, sita_hat)
         else:
-            loss = ntm_loss_function(recon_batch, data_bow, mu, logvar) + pred_loss_function(sita, sita_hat)
+            loss = ntm_loss_function(recon_batch, data_bow, mu, logvar)
         loss = loss + model.l1_strength * l1_penalty(model.fcd1.weight)
         loss.backward()
         train_loss += loss.item()
