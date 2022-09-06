@@ -23,7 +23,7 @@ class Model(nn.Module):
         self.sita_hat = None
         self.l1_strength = torch.FloatTensor([l1_strength]).to(device)
         self.fcp1 = nn.Linear(topic_num, topic_num)
-        self.fcp2 = nn.Linear(topic_num, topic_num)
+        self.fcp2 = nn.Linear(1, 1, bias=True)
     
     def encode(self, x):
         e1 = F.relu(self.fc11(x))

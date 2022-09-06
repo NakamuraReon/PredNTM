@@ -11,7 +11,7 @@ from torch.utils.tensorboard import SummaryWriter
 from sklearn.utils import shuffle
 import model
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
+# torch.autograd.set_detect_anomaly(True)
 
 def ntm_loss_function(recon_x, x, mu, logvar):
     BCE = F.binary_cross_entropy(recon_x, x, size_average=False)
@@ -47,22 +47,22 @@ def compute_loss(model, dataloader, optimizer, epoch, last_batch_idx, sita_hat, 
         # normalize data
         data_bow_norm = F.normalize(data_bow)
         optimizer.zero_grad()
-        # z, g, recon_batch, mu, logvar, y_rnn = model(data_bow_norm)
         z, g, recon_batch, mu, logvar, sita, next_sita_hat = model(data_bow_norm, batch_idx, last_batch_idx)
-        # z, g, recon_batch, mu, logvar = model(data_bow_norm, batch_idx, dataloader, period)
         # print("sita:{}".format(sita))
-        # print("sita_hat:{}".format(next_sita_hat))
-        # print("sita_hat:{}".format(sita_hat/sum(sita_hat)))
+        print("{}".format(sita))
+        print("{}".format(sita_hat))
         if sita_hat == None:
-            print(batch_idx)
             loss = ntm_loss_function(recon_batch, data_bow, mu, logvar)
+            # loss = pred_loss_function(sita, sita_hat)
         elif batch_idx == last_batch_idx:
             # loss = ntm_loss_function(recon_batch, data_bow, mu, logvar) + pred_loss_function(sita, sita_hat)
-            loss = pred_loss_function(sita, sita_hat)
+            # loss = pred_loss_function(sita, sita_hat)
+            loss = ntm_loss_function(recon_batch, data_bow, mu, logvar)
         else:
+            # loss = pred_loss_function(sita, sita_hat)
             loss = ntm_loss_function(recon_batch, data_bow, mu, logvar)
         loss = loss + model.l1_strength * l1_penalty(model.fcd1.weight)
-        loss.backward()
+        loss.backward(retain_graph=True)
         train_loss += loss.item()
         optimizer.step()
 
