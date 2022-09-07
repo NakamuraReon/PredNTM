@@ -51,23 +51,32 @@ class Model(nn.Module):
         d1 = F.softmax(self.fcd1(z), dim=1)
         return d1
 
-    def forward(self, x, batch_idx, last_batch_idx):
+    def forward(self, x, batch_idx=None, last_batch_idx=None):
         mu, logvar = self.encode(x.view(-1, self.input_dim))
         z = self.reparameterize(mu, logvar)
-        g = self.generate(z)  
-        if batch_idx == 0:
-            self.cat_z = z
-            # print("{}-{}".format(period, batch_idx))
-        elif batch_idx == last_batch_idx:
-            self.cat_z = torch.cat((self.cat_z, z), 0)
-            sum_z = sum(self.cat_z)
-            self.sita = torch.softmax(sum_z, dim=0)
-            self.sita = torch.reshape(self.sita, (1, 15))
-            self.sita_hat = self.fcp1(self.sita)
-            # print("{}-{}-elif".format(period, batch_idx))
+        g = self.generate(z)
+        if batch_idx==None:
+            self.sita = None
+            self.sita_hat = None
         else:
-            self.cat_z = torch.cat((self.cat_z, z), 0)
-            # print("{}-{}-else".format(period, batch_idx))
+            if batch_idx == 0:
+                self.cat_z = z
+                # print("{}-{}".format(period, batch_idx))
+            elif batch_idx == last_batch_idx:
+                self.cat_z = torch.cat((self.cat_z, z), 0)
+                sum_z = sum(self.cat_z)
+                self.sita = torch.softmax(sum_z, dim=0)
+                # self.sita = torch.reshape(self.sita, (15, 1))
+                # self.sita = torch.reshape(self.sita, (1, -1))
+                self.sita = torch.reshape(self.sita, (1, 15))
+                # print(sum(sum(self.sita)))
+                self.sita_hat = torch.softmax(self.fcp1(self.sita), dim=1)
+                # print(sum(sum(self.sita_hat)))
+                # print("{}-{}-elif".format(period, batch_idx))
+                # print(self.sita)
+            else:
+                self.cat_z = torch.cat((self.cat_z, z), 0)
+                # print("{}-{}-else".format(period, batch_idx))
         return z, g, self.decode(g), mu, logvar, self.sita, self.sita_hat
 
     def print_topic_words(self, vocab_dic, fn, n_top_words=10):

@@ -49,17 +49,15 @@ def compute_loss(model, dataloader, optimizer, epoch, last_batch_idx, sita_hat, 
         optimizer.zero_grad()
         z, g, recon_batch, mu, logvar, sita, next_sita_hat = model(data_bow_norm, batch_idx, last_batch_idx)
         # print("sita:{}".format(sita))
-        print("{}".format(sita))
-        print("{}".format(sita_hat))
+        print("sita{}-batch{}".format(sita, batch_idx))
+        print("sita_hat{}-batch{}".format(sita_hat, batch_idx))
         if sita_hat == None:
             loss = ntm_loss_function(recon_batch, data_bow, mu, logvar)
-            # loss = pred_loss_function(sita, sita_hat)
         elif batch_idx == last_batch_idx:
-            # loss = ntm_loss_function(recon_batch, data_bow, mu, logvar) + pred_loss_function(sita, sita_hat)
-            # loss = pred_loss_function(sita, sita_hat)
+            # loss = ntm_loss_function(recon_batch, data_bow, mu, logvar) + pred_loss_function(sita, next_sita_hat)
+            # loss = pred_loss_function(sita, next_sita_hat)
             loss = ntm_loss_function(recon_batch, data_bow, mu, logvar)
         else:
-            # loss = pred_loss_function(sita, sita_hat)
             loss = ntm_loss_function(recon_batch, data_bow, mu, logvar)
         loss = loss + model.l1_strength * l1_penalty(model.fcd1.weight)
         loss.backward(retain_graph=True)
@@ -76,7 +74,31 @@ def compute_loss(model, dataloader, optimizer, epoch, last_batch_idx, sita_hat, 
     print('Train epoch: {} Average loss: {:.4f}'.format(
         epoch, avg_loss))
 
-    return sparsity, avg_loss, next_sita_hat
+    return sparsity, avg_loss, sita, next_sita_hat
+
+
+def compute_loss2(model, dataloader, optimizer, epoch, last_batch_idx, sita_hat, target_sparsity=0.85):
+    model.train()
+    a = torch.tensor([[0.1, 0.1, 0.1, 0.0, 0.1, 0.0, 0.0, 0.1, 0.1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]])
+    train_loss = 0
+    for batch_idx, data_bow in enumerate(dataloader):
+        data_bow = data_bow.to(device)
+        # normalize data
+        data_bow_norm = F.normalize(data_bow)
+        optimizer.zero_grad()
+        z, g, recon_batch, mu, logvar, sita, next_sita_hat = model(data_bow_norm, batch_idx, last_batch_idx)
+        if batch_idx == last_batch_idx:
+            # sita = sita.reshape(-1,1)
+            # sita_hat = sita_hat.reshape(-1,1)
+            print(sita)
+            print(next_sita_hat)
+            if not sita_hat==None:
+                # loss = pred_loss_function(sita, sita_hat)
+                loss = pred_loss_function(sita, next_sita_hat)
+                loss.backward()
+                train_loss += loss.item()
+                optimizer.step()
+    return next_sita_hat
 
 def compute_test_loss(model, dataloader, epoch):
     model.eval()
@@ -85,7 +107,7 @@ def compute_test_loss(model, dataloader, epoch):
         for i, data_bow in enumerate(dataloader):
             data_bow = data_bow.to(device)
             data_bow_norm = F.normalize(data_bow)
-            z, _, recon_batch, mu, logvar = model(data_bow_norm)
+            z, _, recon_batch, mu, logvar, _, _ = model(data_bow_norm)
             test_loss += ntm_loss_function(recon_batch, data_bow, mu, logvar).item()
     avg_loss = test_loss / len(dataloader.data)
     print('Test epoch : {} Average loss: {:.4f}'.format(epoch, avg_loss))
@@ -99,7 +121,7 @@ def compute_perplexity(model, dataloader):
         for i, data_bow in enumerate(dataloader):
             data_bow = data_bow.to(device)
             data_bow_norm = F.normalize(data_bow)      
-            z, g, recon_batch, mu, logvar = model(data_bow_norm)
+            z, g, recon_batch, mu, logvar, _, _ = model(data_bow_norm)
             #loss += ntm_loss_function(recon_batch, data_bow, mu, logvar).detach()
             loss += F.binary_cross_entropy(recon_batch, data_bow, size_average=False)
     loss = loss / dataloader.word_count
@@ -114,7 +136,7 @@ def compute_z(model, dataloader):
         for i, data_bow in enumerate(dataloader):
             data_bow = data_bow.to(device)
             data_bow_norm = F.normalize(data_bow)
-            z, _, _, _, _ = model(data_bow_norm)
+            z, _, _, _, _, _, _ = model(data_bow_norm)
             computed_z = torch.cat((computed_z, z), 0)
     # print("computed_z: {}".format(computed_z))
     # print("computed_zsize: {}".format(len(computed_z)))
@@ -128,7 +150,7 @@ def lasy_predict(model, dataloader,vocab_dic, num_example=5, n_top_words=5):
     docs, text = docs[:num_example], text[:num_example]
     docs_device = docs.to(device)
     docs_norm = F.normalize(docs_device)
-    z, _, _, _, _ = model(docs_norm)
+    z, _, _, _, _, _, _ = model(docs_norm)
     z_a = z.detach().cpu().argmax(1).numpy()
     z = torch.softmax(z, dim=1).detach().cpu().numpy()
     beta_exp = model.fcd1.weight.data.cpu().numpy().T
@@ -217,31 +239,26 @@ class Estimator:
         self.model.apply(init_weights)
 
     
-    def fit(self, train_data, valid_data, bow_vocab, batch_size, last_batch_idx, sita_hat, n_epoch=200):
+    def fit(self, train_data, valid_data, bow_vocab, batch_size, last_batch_idx, sita_hat, period, n_epoch=200):
+        logdir = "./"
         dataloader = DataLoader(data = train_data, bow_vocab = bow_vocab, batch_size = batch_size)
-        # dataloader_valid = DataLoader(data = valid_data, bow_vocab = bow_vocab, batch_size = batch_size, shuffle=False)
+        dataloader_valid = DataLoader(data = valid_data, bow_vocab = bow_vocab, batch_size = batch_size, shuffle=False)
         # Start Training
         for epoch in range(1, n_epoch + 1):
             print("======== Epoch", epoch, " ========")
-            sparsity, train_loss, next_sita_hat = compute_loss(self.model, dataloader, self.optimizer, epoch, last_batch_idx, sita_hat)
-            # z, val_loss = compute_test_loss(self.ntm_model, dataloader_valid, epoch)
+            sparsity, avg_loss, sita, next_sita_hat = compute_loss(self.model, dataloader, self.optimizer, epoch, last_batch_idx, sita_hat)
+            z, val_loss = compute_test_loss(self.model, dataloader_valid, epoch)
             
-            # pp = compute_perplexity(self.ntm_model, dataloader)
-            # pp_val = compute_perplexity(self.ntm_model, dataloader_valid)
-            # print("PP(train) = %.3f, PP(valid) = %.3f" % (pp, pp_val))
-            
-            # writer.add_scalars('scalar/loss',{'train_loss': train_loss,'valid_loss': val_loss},epoch)
-            # writer.add_scalars('scalar/perplexity',{'train_pp': pp,'valid_pp': pp_val},epoch)
-            # writer.add_scalars('scalar/sparsity',{'sparsity': sparsity},epoch)
-            # writer.add_scalars('scalar/l1_strength',{'l1_strength': self.ntm_model.l1_strength},epoch)
+            pp = compute_perplexity(self.model, dataloader)
+            pp_val = compute_perplexity(self.model, dataloader_valid)
+            print("PP(train) = %.3f, PP(valid) = %.3f" % (pp, pp_val))
 
-            # if epoch % 50 == 0:
-            #     self.ntm_model.print_topic_words(bow_vocab, os.path.join(logdir, 'topwords_e%d.txt' % epoch))
-            #     lasy_predict(self.ntm_model, dataloader_valid, bow_vocab, num_example=10, n_top_words=10)
-        # writer.close()
+            if epoch % 1 == 0:
+                self.model.print_topic_words(bow_vocab, os.path.join(logdir, str(period)+'-topwords_e%d.txt' % epoch))
+                lasy_predict(self.model, dataloader_valid, bow_vocab, num_example=10, n_top_words=10)
         
-        # z_train = compute_z(self.ntm_model, dataloader)
-        # z_valid = compute_z(self.ntm_model, dataloader_valid)
+        # z_train = compute_z(self.model, dataloader)
+        # z_valid = compute_z(self.model, dataloader_valid)
 
-        # return self.ntm_model, self.sita_hat, z_train, z_valid
-        return next_sita_hat
+        # return self.model, z_train, z_valid
+        return sita, next_sita_hat
