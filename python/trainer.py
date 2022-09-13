@@ -50,15 +50,16 @@ def compute_loss(model, dataloader, optimizer, epoch, last_batch_idx, sita_hat, 
         z, g, recon_batch, mu, logvar, sita, next_sita_hat = model(data_bow_norm, batch_idx, last_batch_idx)
         # print("sita:{}".format(sita))
         print("sita{}-batch{}".format(sita, batch_idx))
-        print("sita_hat{}-batch{}".format(sita_hat, batch_idx))
-        if sita_hat == None:
-            loss = ntm_loss_function(recon_batch, data_bow, mu, logvar)
-        elif batch_idx == last_batch_idx:
-            # loss = ntm_loss_function(recon_batch, data_bow, mu, logvar) + pred_loss_function(sita, next_sita_hat)
-            # loss = pred_loss_function(sita, next_sita_hat)
-            loss = ntm_loss_function(recon_batch, data_bow, mu, logvar)
-        else:
-            loss = ntm_loss_function(recon_batch, data_bow, mu, logvar)
+        print("next_sita_hat{}-batch{}".format(next_sita_hat, batch_idx))
+        # if sita_hat == None:
+        #     loss = ntm_loss_function(recon_batch, data_bow, mu, logvar)
+        # elif batch_idx == last_batch_idx:
+        #     # loss = ntm_loss_function(recon_batch, data_bow, mu, logvar) + pred_loss_function(sita, next_sita_hat)
+        #     # loss = pred_loss_function(sita, next_sita_hat)
+        #     loss = ntm_loss_function(recon_batch, data_bow, mu, logvar)
+        # else:
+        #     loss = ntm_loss_function(recon_batch, data_bow, mu, logvar)
+        loss = ntm_loss_function(recon_batch, data_bow, mu, logvar)
         loss = loss + model.l1_strength * l1_penalty(model.fcd1.weight)
         loss.backward(retain_graph=True)
         train_loss += loss.item()
@@ -79,7 +80,7 @@ def compute_loss(model, dataloader, optimizer, epoch, last_batch_idx, sita_hat, 
 
 def compute_loss2(model, dataloader, optimizer, epoch, last_batch_idx, sita_hat, target_sparsity=0.85):
     model.train()
-    a = torch.tensor([[0.1, 0.1, 0.1, 0.0, 0.1, 0.0, 0.0, 0.1, 0.1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]])
+    # a = torch.tensor([[0.1, 0.1, 0.1, 0.0, 0.1, 0.0, 0.0, 0.1, 0.1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]])
     train_loss = 0
     for batch_idx, data_bow in enumerate(dataloader):
         data_bow = data_bow.to(device)
@@ -240,7 +241,7 @@ class Estimator:
 
     
     def fit(self, train_data, valid_data, bow_vocab, batch_size, last_batch_idx, sita_hat, period, n_epoch=200):
-        logdir = "./"
+        logdir = "./topicwords/"
         dataloader = DataLoader(data = train_data, bow_vocab = bow_vocab, batch_size = batch_size)
         dataloader_valid = DataLoader(data = valid_data, bow_vocab = bow_vocab, batch_size = batch_size, shuffle=False)
         # Start Training
@@ -253,7 +254,7 @@ class Estimator:
             pp_val = compute_perplexity(self.model, dataloader_valid)
             print("PP(train) = %.3f, PP(valid) = %.3f" % (pp, pp_val))
 
-            if epoch % 1 == 0:
+            if epoch % n_epoch == 0:
                 self.model.print_topic_words(bow_vocab, os.path.join(logdir, str(period)+'-topwords_e%d.txt' % epoch))
                 lasy_predict(self.model, dataloader_valid, bow_vocab, num_example=10, n_top_words=10)
         
